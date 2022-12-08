@@ -36,8 +36,11 @@ int verbose;
 //
 //TODO: Add your own Branch Predictor data structures here
 //
+uint32_t ghistory;
+uint8_t * gBHR;
 
-
+uint32_t index;
+  
 //------------------------------------//
 //        Predictor Functions         //
 //------------------------------------//
@@ -50,6 +53,9 @@ init_predictor()
   //
   //TODO: Initialize Branch Predictor Data Structures
   //
+  ghistory = 0;
+  gBHR = malloc((1 << ghistoryBits) * sizeof(uint8_t));
+
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -68,6 +74,8 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
+      index = (pc ^ ghistory)&((1 << ghistoryBits) - 1);
+      return gBHR[index];
     case TOURNAMENT:
     case CUSTOM:
     default:
@@ -85,7 +93,16 @@ make_prediction(uint32_t pc)
 void
 train_predictor(uint32_t pc, uint8_t outcome)
 {
-  //
-  //TODO: Implement Predictor training
-  //
+  switch (bpType) {
+    case STATIC:
+      break;
+    case GSHARE:
+      index = (pc ^ ghistory) &((1 << ghistoryBits) - 1);
+      gBHR[index] = outcome;
+      ghistory = (ghistory<<1) | outcome;
+    case TOURNAMENT:
+    case CUSTOM:
+    default:
+      break;
+  }
 }
