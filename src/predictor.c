@@ -39,12 +39,12 @@ int verbose;
 uint32_t ghistory;
 uint8_t * gBHR;
 
-uint8_t counter;    //for choosing predictor in TOURNAMENT
-uint32_t lhistory;
+uint8_t counter;    //for choosing predictor in TOURNAMENT, 2-bit
 uint8_t * lBHR;
-
+uint32_t *lPHT;
 
 uint32_t index;
+uint32_t pindex;
   
 //------------------------------------//
 //        Predictor Functions         //
@@ -62,8 +62,8 @@ init_predictor()
   gBHR = malloc((1 << ghistoryBits) * sizeof(uint8_t));
 
   counter = 0;
-  lhistory = 0;
-  lBHR = malloc((1 << ghistoryBits) * sizeof(uint8_t));
+  lBHR = malloc((1 << lhistoryBits) * sizeof(uint8_t));
+  lPHT = malloc((1 << pcIndexBits) * sizeof(uint32_t));
 
 
 }
@@ -88,12 +88,13 @@ make_prediction(uint32_t pc)
       if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
     case TOURNAMENT:
       if (counter>=2){
-        index = pc & ((1 << lhistoryBits) - 1);
-        return lBHR[index];
+        pindex = pc & ((1 << pcIndexBits) - 1);
+        index = lPHT[pindex]&((1 << lhistoryBits) - 1);
+        if(lBHR[index]== WT || lBHR[index]== ST) return TAKEN;
       }
       else{
         index = pc &((1 << ghistoryBits) - 1);
-        return gBHR[index];
+        if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
       }
     case CUSTOM:
     default:
@@ -108,15 +109,6 @@ make_prediction(uint32_t pc)
 // outcome 'outcome' (true indicates that the branch was taken, false
 // indicates that the branch was not taken)
 //
-
-
-// uint8_t bitCount(uint32_t n)
-// {
-//     uint8_t c =0 ; 
-//     for (c =0; n; n >>=1) 
-//         c += n &1 ; 
-//     return c ;
-// }
 
 
 
@@ -137,16 +129,22 @@ train_predictor(uint32_t pc, uint8_t outcome)
       if (counter>=2){
         if(outcome==1 && counter==2) counter++;
         if(outcome==0) counter--; 
-        index = pc & ((1 << lhistoryBits) - 1);
-        lBHR[index] = outcome;
-        lhistory = (lhistory<<1) | outcome;
+        pindex = pc & ((1 << pcIndexBits) - 1);
+        index = lPHT[pindex]&((1 << lhistoryBits) - 1);
+        lPHT[pindex] = (lPHT[pindex]<<1) | outcome;
+        if(lBHR[index]==ST && outcome==TAKEN)  lBHR[index]=ST;
+        else if(lBHR[index]==SN && outcome==NOTTAKEN) lBHR[index]=SN;
+        else lBHR[index] += outcome==TAKEN?1:-1;
+
       }
       else{
         if(outcome==1 && counter==1) counter--;
         if(outcome==0) counter++; 
-        index = pc &((1 << ghistoryBits) - 1);
-        gBHR[index] = outcome;
         ghistory = (ghistory<<1) | outcome;
+        index = pc &((1 << ghistoryBits) - 1);
+        if(gBHR[index]==ST && outcome==TAKEN)  gBHR[index]=ST;
+        else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
+        else gBHR[index] += outcome==TAKEN?1:-1;
       }
     case CUSTOM:
     default:
