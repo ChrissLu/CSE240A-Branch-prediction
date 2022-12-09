@@ -131,7 +131,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
       ghistory = (ghistory<<1) | outcome;
       if(gBHR[index]==ST && outcome==TAKEN)  gBHR[index]=ST;
       else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
-      else gBHR[index] += outcome;
+      else gBHR[index] += outcome==TAKEN?1:-1;
 
     case TOURNAMENT:
       if (counter>=2){
