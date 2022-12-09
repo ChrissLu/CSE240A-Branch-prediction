@@ -86,6 +86,7 @@ make_prediction(uint32_t pc)
     case GSHARE:
       index = (pc ^ ghistory)&((1 << ghistoryBits) - 1);
       if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
+      else return NOTTAKEN;
     case TOURNAMENT:
       if (counter>=2){
         pindex = pc & ((1 << pcIndexBits) - 1);
@@ -96,6 +97,7 @@ make_prediction(uint32_t pc)
         index = pc &((1 << ghistoryBits) - 1);
         if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
       }
+      return NOTTAKEN;
     case CUSTOM:
     default:
       break;
@@ -124,7 +126,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
       if(gBHR[index]==ST && outcome==TAKEN)  gBHR[index]=ST;
       else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
       else gBHR[index] += outcome==TAKEN?1:-1;
-
+      break;
     case TOURNAMENT:
       if (counter>=2){
         if(outcome==1 && counter==2) counter++;
@@ -146,6 +148,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
         else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
         else gBHR[index] += outcome==TAKEN?1:-1;
       }
+      break;
     case CUSTOM:
     default:
       break;
