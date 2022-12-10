@@ -43,9 +43,11 @@ uint8_t * gBHR;
 uint8_t counter;    //for choosing predictor in TOURNAMENT, 2-bit
 uint8_t * lBHR;
 uint32_t *lPHT;
+uint8_t *choiceT;
 
-uint32_t index;
+uint32_t hindex;
 uint32_t pindex;
+uint32_t choiceIndex;
 
 // used for custom predictor
 int8_t * weight_table;
@@ -75,10 +77,14 @@ init_predictor()
   //
   ghistory = 0;
   gBHR = (uint8_t *)malloc((1U << ghistoryBits) * sizeof(uint8_t));
+  memset(gBHR,0,(1U << ghistoryBits) * sizeof(uint8_t));
 
-  counter = 0;
   lBHR = (uint8_t *)malloc((1U << lhistoryBits) * sizeof(uint8_t));
+  memset(lBHR,0,(1U << ghistoryBits) * sizeof(uint8_t));
   lPHT = (uint32_t *)malloc((1U << pcIndexBits) * sizeof(uint32_t));
+  memset(lPHT,0,(1U << ghistoryBits) * sizeof(uint32_t));
+  choiceT = (uint8_t *)malloc((1U << lhistoryBits) * sizeof(uint8_t));
+  memset(choiceT,0,(1U << ghistoryBits) * sizeof(uint8_t));
 
 
   // Init custom branch predictor
@@ -107,18 +113,20 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
-      index = (pc ^ ghistory)&((1U << ghistoryBits) - 1);
-      if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
+      hindex = (pc ^ ghistory)&((1U << ghistoryBits) - 1);
+      if(gBHR[hindex]== WT || gBHR[hindex]== ST) return TAKEN;
       else return NOTTAKEN;
     case TOURNAMENT:
-      if (counter>=2){
+      choiceIndex = ghistory &((1U << ghistoryBits) - 1);
+      counter = choiceT[choiceIndex];
+      if (counter<2){
         pindex = pc & ((1U << pcIndexBits) - 1);
-        index = lPHT[pindex]&((1U << lhistoryBits) - 1);
-        if(lBHR[index]== WT || lBHR[index]== ST) return TAKEN;
+        hindex = lPHT[pindex]&((1U << lhistoryBits) - 1);
+        if(lBHR[hindex]== WT || lBHR[hindex]== ST) return TAKEN;
       }
       else{
-        index = pc &((1U << ghistoryBits) - 1);
-        if(gBHR[index]== WT || gBHR[index]== ST) return TAKEN;
+        hindex = pc &((1U << ghistoryBits) - 1);
+        if(gBHR[hindex]== WT || gBHR[hindex]== ST) return TAKEN;
       }
       return NOTTAKEN;
     case CUSTOM:
@@ -160,32 +168,34 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case STATIC:
       break;
     case GSHARE:
-      index = (pc ^ ghistory) &((1U << ghistoryBits) - 1);
+      hindex = (pc ^ ghistory) &((1U << ghistoryBits) - 1);
       ghistory = (ghistory<<1) | outcome;
-      if(gBHR[index]==ST && outcome==TAKEN)  gBHR[index]=ST;
-      else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
-      else gBHR[index] += outcome==TAKEN?1:-1;
+      if(gBHR[hindex]==ST && outcome==TAKEN)  gBHR[hindex]=ST;
+      else if(gBHR[hindex]==SN && outcome==NOTTAKEN) gBHR[hindex]=SN;
+      else gBHR[hindex] += outcome==TAKEN?1:-1;
       break;
     case TOURNAMENT:
-      if (counter>=2){
-        if(outcome==1 && counter==2) counter++;
-        if(outcome==0) counter--; 
+      choiceIndex = ghistory &((1U << ghistoryBits) - 1);
+      counter = choiceT[choiceIndex];
+      if (counter<2){
+        if(outcome==1 && counter==1) choiceT[choiceIndex]--;
+        if(outcome==0) choiceT[choiceIndex]++; 
         pindex = pc & ((1U << pcIndexBits) - 1);
-        index = lPHT[pindex]&((1U << lhistoryBits) - 1);
+        hindex = lPHT[pindex]&((1U << lhistoryBits) - 1);
+        if(lBHR[hindex]==ST && outcome==TAKEN)  lBHR[hindex]=ST;
+        else if(lBHR[hindex]==SN && outcome==NOTTAKEN) lBHR[hindex]=SN;
+        else lBHR[hindex] += outcome==TAKEN?1:-1;
         lPHT[pindex] = (lPHT[pindex]<<1) | outcome;
-        if(lBHR[index]==ST && outcome==TAKEN)  lBHR[index]=ST;
-        else if(lBHR[index]==SN && outcome==NOTTAKEN) lBHR[index]=SN;
-        else lBHR[index] += outcome==TAKEN?1:-1;
-
+        ghistory = (ghistory<<1) | outcome;
       }
       else{
-        if(outcome==1 && counter==1) counter--;
-        if(outcome==0) counter++; 
+        if(outcome==1 && counter==2) choiceT[choiceIndex]++;
+        if(outcome==0) choiceT[choiceIndex]--; 
+        hindex = pc &((1U << ghistoryBits) - 1);
+        if(gBHR[hindex]==ST && outcome==TAKEN)  gBHR[hindex]=ST;
+        else if(gBHR[hindex]==SN && outcome==NOTTAKEN) gBHR[hindex]=SN;
+        else gBHR[hindex] += outcome==TAKEN?1:-1;
         ghistory = (ghistory<<1) | outcome;
-        index = pc &((1U << ghistoryBits) - 1);
-        if(gBHR[index]==ST && outcome==TAKEN)  gBHR[index]=ST;
-        else if(gBHR[index]==SN && outcome==NOTTAKEN) gBHR[index]=SN;
-        else gBHR[index] += outcome==TAKEN?1:-1;
       }
       break;
     case CUSTOM:
