@@ -44,6 +44,9 @@ uint8_t counter;    //for choosing predictor in TOURNAMENT, 2-bit
 uint8_t * lBHR;
 uint32_t *lPHT;
 uint8_t *choiceT;
+uint8_t lres;
+uint8_t gres;
+
 
 uint32_t hindex;
 uint32_t pindex;
@@ -87,6 +90,7 @@ init_predictor()
   memset(choiceT,0,(1U << ghistoryBits) * sizeof(uint8_t));
 
 
+
   // Init custom branch predictor
   // size of custom branch predictor is weight_table + ghistory
   // size of weight_table is (2^pcIndexBits * (ghistoryBits+1)) Bytes
@@ -119,16 +123,18 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
       choiceIndex = ghistory &((1U << ghistoryBits) - 1);
       counter = choiceT[choiceIndex];
-      if (counter<2){
+  
         pindex = pc & ((1U << pcIndexBits) - 1);
         hindex = lPHT[pindex]&((1U << lhistoryBits) - 1);
-        if(lBHR[hindex]== WT || lBHR[hindex]== ST) return TAKEN;
-      }
-      else{
+        if(lBHR[hindex]== WT || lBHR[hindex]== ST) lres = TAKEN;
+        else lres = NOTTAKEN;
+      
         hindex = pc &((1U << ghistoryBits) - 1);
-        if(gBHR[hindex]== WT || gBHR[hindex]== ST) return TAKEN;
-      }
-      return NOTTAKEN;
+        if(gBHR[hindex]== WT || gBHR[hindex]== ST) gres = TAKEN;
+        else gres = NOTTAKEN;
+      
+
+      return counter<2 ? lres:gres;
     case CUSTOM:
     {
       uint32_t weight_select_index = pc & ((1U << pcIndexBits) - 1);
@@ -177,26 +183,22 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case TOURNAMENT:
       choiceIndex = ghistory &((1U << ghistoryBits) - 1);
       counter = choiceT[choiceIndex];
-      if (counter<2){
-        if(outcome==1 && counter==1) choiceT[choiceIndex]--;
-        if(outcome==0) choiceT[choiceIndex]++; 
-        pindex = pc & ((1U << pcIndexBits) - 1);
-        hindex = lPHT[pindex]&((1U << lhistoryBits) - 1);
-        if(lBHR[hindex]==ST && outcome==TAKEN)  lBHR[hindex]=ST;
-        else if(lBHR[hindex]==SN && outcome==NOTTAKEN) lBHR[hindex]=SN;
-        else lBHR[hindex] += outcome==TAKEN?1:-1;
-        lPHT[pindex] = (lPHT[pindex]<<1) | outcome;
-        ghistory = (ghistory<<1) | outcome;
-      }
-      else{
-        if(outcome==1 && counter==2) choiceT[choiceIndex]++;
-        if(outcome==0) choiceT[choiceIndex]--; 
-        hindex = pc &((1U << ghistoryBits) - 1);
-        if(gBHR[hindex]==ST && outcome==TAKEN)  gBHR[hindex]=ST;
-        else if(gBHR[hindex]==SN && outcome==NOTTAKEN) gBHR[hindex]=SN;
-        else gBHR[hindex] += outcome==TAKEN?1:-1;
-        ghistory = (ghistory<<1) | outcome;
-      }
+
+        if(outcome==lres && outcome!=gres && counter!=0) choiceT[choiceIndex]--;
+        if(outcome==gres && outcome!=lres && counter!=3) choiceT[choiceIndex]++;
+
+      pindex = pc & ((1U << pcIndexBits) - 1);
+      hindex = lPHT[pindex]&((1U << lhistoryBits) - 1);
+      if(lBHR[hindex]==ST && outcome==TAKEN)  lBHR[hindex]=ST;
+      else if(lBHR[hindex]==SN && outcome==NOTTAKEN) lBHR[hindex]=SN;
+      else lBHR[hindex] += outcome==TAKEN?1:-1;
+      lPHT[pindex] = (lPHT[pindex]<<1) | outcome;
+
+      hindex = pc &((1U << ghistoryBits) - 1);
+      if(gBHR[hindex]==ST && outcome==TAKEN)  gBHR[hindex]=ST;
+      else if(gBHR[hindex]==SN && outcome==NOTTAKEN) gBHR[hindex]=SN;
+      else gBHR[hindex] += outcome==TAKEN?1:-1;
+      ghistory = (ghistory<<1) | outcome;
       break;
     case CUSTOM:
     {
